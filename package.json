@@ -1,5 +1,5 @@
 {
-  "name": "@ycel/rses",
+  "name": "rses-cli",
   "version": "0.1.0",
   "description": "Cross-resume between Claude Code, Codex CLI, and OpenCode sessions",
   "bin": {
@@ -13,9 +13,9 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yazcaleb/rses.git"
+    "url": "git+https://github.com/yazcaleb/rses-cli.git"
   },
-  "homepage": "https://github.com/yazcaleb/rses",
+  "homepage": "https://github.com/yazcaleb/rses-cli",
   "author": "yazcaleb",
   "dependencies": {
     "commander": "^12.0.0"
