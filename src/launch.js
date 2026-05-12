@@ -19,6 +19,7 @@ export function launchWithHandoff(tool, handoff, cwd, passthroughArgs = []) {
       const installHints = {
         claude: '  Install: npm i -g @anthropic-ai/claude-code',
         codex: '  Install: npm i -g @openai/codex',
+        gemini: '  Install: npm i -g @google/gemini-cli',
         opencode: '  Install: see https://github.com/opencode-ai/opencode',
       }
       console.error(`\nError: '${tool}' not found on PATH. Is it installed?`)

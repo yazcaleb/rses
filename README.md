@@ -1,6 +1,6 @@
 # rses
 
-**Cross-resume between Claude Code, Codex CLI, and OpenCode.**
+**Cross-resume between Claude Code, Codex CLI, Gemini CLI, and OpenCode.**
 Pick up where one AI coding agent left off — in another.
 
 ```
@@ -9,7 +9,7 @@ rses claude with codex --last
 
 That's it. Claude launches with full context from your last Codex session: the original task, git diff, conversation history, and a pointer to the session file for deep-dive.
 
-Works in all 6 directions between Claude Code, Codex CLI, and OpenCode.
+Works in all 12 directions between Claude Code, Codex CLI, Gemini CLI, and OpenCode.
 
 ## Install
 
@@ -28,9 +28,11 @@ rses claude with codex --last
 # Or the other way around.
 rses codex with claude --last
 
-# OpenCode works too — any combination.
+# OpenCode and Gemini work too — any combination.
 rses opencode with codex --last
 rses claude with opencode --last
+rses claude with gemini --last
+rses gemini with codex --last
 ```
 
 ## What it does
@@ -62,6 +64,7 @@ rses claude with codex --last --dry-run           # print handoff, don't launch
 rses ls                    # all tools
 rses ls codex              # just Codex
 rses ls claude             # just Claude
+rses ls gemini             # just Gemini
 rses ls opencode           # just OpenCode
 rses ls codex --dir .      # filter by working directory
 ```
@@ -81,6 +84,7 @@ Power-user shorthand — type less, ship faster:
 |-------|-----------|
 | `cc`, `cl`, `c` | `claude` |
 | `cdx`, `cx`, `x` | `codex` |
+| `gm`, `gem`, `g` | `gemini` |
 | `oc`, `o` | `opencode` |
 | `w` | `with` |
 
@@ -113,6 +117,7 @@ rses opencode with claude --last --provider anthropic
 |------|--------|-------------|
 | Claude Code | `~/.claude/transcripts/ses_*.jsonl` | Reads only `user`/`assistant` types |
 | Codex CLI | `~/.codex/state_*.sqlite` (auto-discovers version) + JSONL fallback | Handles both 2025 and 2026 schemas |
+| Gemini CLI | `~/.gemini/tmp/<projectHash>/chats/session-*.jsonl` (legacy `.json` fallback) | Reads only `user`/`gemini` records; `$set` / `$rewindTo` honored |
 | OpenCode | `~/.local/share/opencode/opencode.db` | Single JOIN query, reads stable columns only |
 
 All parsers are read-only and wrapped in try/catch — if a tool changes its format, rses degrades gracefully instead of crashing.
@@ -120,7 +125,7 @@ All parsers are read-only and wrapped in try/catch — if a tool changes its for
 ## Requirements
 
 - **Node.js 22+** (for built-in `node:sqlite`)
-- At least one of: [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Codex CLI](https://github.com/openai/codex), [OpenCode](https://github.com/opencode-ai/opencode)
+- At least one of: [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Codex CLI](https://github.com/openai/codex), [Gemini CLI](https://github.com/google-gemini/gemini-cli), [OpenCode](https://github.com/opencode-ai/opencode)
 - macOS or Linux (Windows support planned)
 
 ## License
