@@ -1,6 +1,7 @@
 import { findCodexSessions, queryCodexSessions } from './parse-codex.js'
 import { findClaudeSessions } from './parse-claude.js'
 import { queryOpenCodeSessions } from './parse-opencode.js'
+import { findGeminiSessions, parseGeminiSession } from './parse-gemini.js'
 import { readFileSync } from 'fs'
 import { basename } from 'path'
 
@@ -112,26 +113,46 @@ export function lsSessions(tool, filterDir = null) {
       return
     }
 
-    // Filesystem fallback (Claude, or Codex without SQLite)
-    const sessions = tool === 'codex'
-      ? findCodexSessions(filterDir)
-      : findClaudeSessions(filterDir)
+    if (tool === 'gemini') {
+      const sessions = findGeminiSessions(filterDir)
+      if (!sessions.length) {
+        console.log(`No ${tool} sessions found.`)
+        return
+      }
+      rows = sessions.slice(0, 20).map(({ path, mtime }) => {
+        const base = basename(path).replace(/\.(jsonl|json)$/, '')
+        let id = base.split('-').pop()
+        let cwd = '—', task = '(no task)'
+        try {
+          const p = parseGeminiSession(path)
+          if (p.sessionId) id = p.sessionId
+          if (p.cwd) cwd = p.cwd
+          if (p.task) task = p.task.slice(0, 70)
+        } catch {}
+        return { id, date: formatDate(mtime), cwd, task }
+      })
+    } else {
+      // Filesystem fallback (Claude, or Codex without SQLite)
+      const sessions = tool === 'codex'
+        ? findCodexSessions(filterDir)
+        : findClaudeSessions(filterDir)
 
-    if (!sessions.length) {
-      console.log(`No ${tool} sessions found.`)
-      return
+      if (!sessions.length) {
+        console.log(`No ${tool} sessions found.`)
+        return
+      }
+
+      rows = sessions.slice(0, 20).map(({ path, mtime }) => {
+        const name = basename(path, '.jsonl')
+        const id = tool === 'codex'
+          ? name.split('-').slice(-5).join('-')
+          : name.replace('ses_', '')
+        const date = formatDate(mtime)
+        const cwd = extractCwd(path, tool) || '—'
+        const task = extractFirstTask(path, tool)
+        return { id, date, cwd, task }
+      })
     }
-
-    rows = sessions.slice(0, 20).map(({ path, mtime }) => {
-      const name = basename(path, '.jsonl')
-      const id = tool === 'codex'
-        ? name.split('-').slice(-5).join('-')
-        : name.replace('ses_', '')
-      const date = formatDate(mtime)
-      const cwd = extractCwd(path, tool) || '—'
-      const task = extractFirstTask(path, tool)
-      return { id, date, cwd, task }
-    })
   }
 
   if (!rows.length) {

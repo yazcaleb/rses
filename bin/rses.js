@@ -18,15 +18,21 @@ import {
   parseOpenCodeSession, findOpenCodeSessionById, getLastOpenCodeSession,
   queryOpenCodeSessions
 } from '../src/parse-opencode.js'
+import {
+  parseGeminiSession, findGeminiSessions, findGeminiSessionById,
+  getLastGeminiSession
+} from '../src/parse-gemini.js'
 import { buildHandoff } from '../src/build-handoff.js'
 import { launchWithHandoff } from '../src/launch.js'
 import { lsSessions } from '../src/ls.js'
 import { pick } from '../src/picker.js'
 
-const VALID_TOOLS = new Set(['claude', 'codex', 'opencode'])
+const VALID_TOOLS = new Set(['claude', 'codex', 'gemini', 'opencode'])
+const TOOLS_LIST = "'claude', 'codex', 'gemini', or 'opencode'"
 const ALIASES = {
   cc: 'claude', cl: 'claude', c: 'claude',
   cdx: 'codex', cx: 'codex', x: 'codex',
+  gm: 'gemini', gem: 'gemini', g: 'gemini',
   oc: 'opencode', o: 'opencode',
   w: 'with',
 }
@@ -34,13 +40,14 @@ function resolve_alias(s) { return ALIASES[s] || s }
 const RESUME_HINTS = {
   claude: '  claude --resume',
   codex: '  codex resume',
+  gemini: '  gemini --resume latest',
   opencode: '  opencode (select session from built-in picker)',
 }
 
 program
   .name('rses')
   .version('0.1.0')
-  .description('Cross-resume between Claude Code, Codex CLI, and OpenCode sessions')
+  .description('Cross-resume between Claude Code, Codex CLI, Gemini CLI, and OpenCode sessions')
 
 program
   .command('export <source> <id>')
@@ -49,7 +56,7 @@ program
   .action((rawSource, id, opts) => {
     const source = resolve_alias(rawSource)
     if (!VALID_TOOLS.has(source)) {
-      console.error(`Unknown source: ${source}. Use 'claude', 'codex', or 'opencode'.`)
+      console.error(`Unknown source: ${source}. Use ${TOOLS_LIST}.`)
       process.exit(1)
     }
     const handoff = resolveAndBuild(source, id, { ...opts, last: false })
@@ -58,14 +65,14 @@ program
 
 program
   .command('ls [tool]')
-  .description('List recent sessions (claude, codex, opencode, or all)')
+  .description('List recent sessions (claude, codex, gemini, opencode, or all)')
   .option('--dir <path>', 'Filter by working directory')
   .action((rawTool, opts) => {
     const tool = rawTool ? resolve_alias(rawTool) : null
-    const tools = tool ? [tool] : ['codex', 'claude', 'opencode']
+    const tools = tool ? [tool] : ['codex', 'claude', 'gemini', 'opencode']
     for (const t of tools) {
       if (!VALID_TOOLS.has(t)) {
-        console.error(`Unknown tool: ${t}. Use 'claude', 'codex', or 'opencode'.`)
+        console.error(`Unknown tool: ${t}. Use ${TOOLS_LIST}.`)
         process.exit(1)
       }
       lsSessions(t, opts.dir ? expandPath(opts.dir) : null)
@@ -181,6 +188,24 @@ async function pickSession(source, filterDir) {
 
     return pick(items, 'Select an OpenCode session:')
 
+  } else if (source === 'gemini') {
+    const files = findGeminiSessions(filterDir)
+    if (!files.length) return null
+
+    const items = files.slice(0, 30).map(({ path, mtime }) => {
+      const date = new Date(mtime).toISOString().slice(0, 16).replace('T', ' ')
+      let cwd = '—'
+      let task = '(no task)'
+      try {
+        const p = parseGeminiSession(path)
+        if (p.cwd) cwd = shorten(p.cwd)
+        if (p.task) task = p.task
+      } catch {}
+      return { display: makeDisplay(date, cwd, task), value: path }
+    })
+
+    return pick(items, 'Select a Gemini session:')
+
   } else {
     const files = findClaudeSessions(filterDir)
     if (!files.length) return null
@@ -285,8 +310,32 @@ async function resolveAndBuildAsync(source, id, opts) {
       process.exit(1)
     }
 
+  } else if (source === 'gemini') {
+    if (opts.last) {
+      filePath = getLastGeminiSession(filterDir)
+      if (!filePath) {
+        console.error('No Gemini sessions found' + (filterDir ? ` in ${filterDir}` : '') + '.')
+        process.exit(1)
+      }
+    } else if (id) {
+      filePath = findGeminiSessionById(id)
+      if (!filePath) {
+        console.error(`Gemini session not found: ${id}`)
+        console.error('Tip: run `rses ls gemini` to list sessions.')
+        process.exit(1)
+      }
+    } else {
+      filePath = await pickSession('gemini', filterDir)
+      if (!filePath) { console.error('Cancelled.'); process.exit(0) }
+    }
+
+    try { parsed = parseGeminiSession(filePath); parsed.filePath = filePath } catch (e) {
+      console.error(`Failed to parse Gemini session: ${e.message}`)
+      process.exit(1)
+    }
+
   } else {
-    console.error(`Unknown source tool: ${source}. Use 'claude', 'codex', or 'opencode'.`)
+    console.error(`Unknown source tool: ${source}. Use ${TOOLS_LIST}.`)
     process.exit(1)
   }
 
@@ -315,8 +364,13 @@ function resolveAndBuild(source, id, opts) {
     const sessionId = opts.last ? getLastOpenCodeSession(filterDir) : findOpenCodeSessionById(id)
     if (!sessionId) { console.error(`OpenCode session not found: ${id}`); process.exit(1) }
     parsed = parseOpenCodeSession(sessionId)
+  } else if (source === 'gemini') {
+    if (!id && !opts.last) { console.error('export requires a session ID.'); process.exit(1) }
+    filePath = opts.last ? getLastGeminiSession(filterDir) : findGeminiSessionById(id)
+    if (!filePath) { console.error(`Gemini session not found: ${id}`); process.exit(1) }
+    parsed = parseGeminiSession(filePath); parsed.filePath = filePath
   } else {
-    console.error(`Unknown source: ${source}. Use 'claude', 'codex', or 'opencode'.`)
+    console.error(`Unknown source: ${source}. Use ${TOOLS_LIST}.`)
     process.exit(1)
   }
 
@@ -326,10 +380,10 @@ function resolveAndBuild(source, id, opts) {
 
 async function runHandoff(target, source, id, opts) {
   if (!VALID_TOOLS.has(target)) {
-    console.error(`Unknown target: ${target}. Use 'claude', 'codex', or 'opencode'.`); process.exit(1)
+    console.error(`Unknown target: ${target}. Use ${TOOLS_LIST}.`); process.exit(1)
   }
   if (!VALID_TOOLS.has(source)) {
-    console.error(`Unknown source: ${source}. Use 'claude', 'codex', or 'opencode'.`); process.exit(1)
+    console.error(`Unknown source: ${source}. Use ${TOOLS_LIST}.`); process.exit(1)
   }
   if (target === source) {
     console.error(`Same source and target (${target}). Use the native resume:`)
